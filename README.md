@@ -8,6 +8,16 @@ Little Notes focuses on a smooth writing experience across devices, with real-ti
 
 [Try Little Notes](https://little-notes-nine.vercel.app)
 
+## Screenshots
+
+### Desktop
+
+![Little Notes Desktop](docs/screenshots/desktop.png)
+
+### Calendar View
+
+![Little Notes Calendar](docs/screenshots/calendar.png)
+
 ## Features
 
 - User authentication
