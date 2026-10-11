@@ -454,12 +454,14 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       {/* Mobile floating new note button */}
 
       {/* Floating Create Note Button */}
+      {/* Floating Create Note Button */}
       <button
           type="button"
           onClick={() => void addNote()}
           disabled={busy || !!conflictId}
           aria-label="Create a new note"
           title="Create a new note"
+          className={editingId ? 'hidden' : 'sm:hidden'}
           style={{
             position: 'fixed',
             right: '20px',
