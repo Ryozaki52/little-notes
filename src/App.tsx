@@ -451,6 +451,31 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
         <footer className="mt-20 pb-6 text-center text-sm opacity-70">Slow days, soft thoughts, little joys. 🌼</footer>
       </main>
 
+      {/* Mobile floating new note button */}
+      <button
+          type="button"
+          onClick={() => void addNote()}
+          disabled={busy || !!conflictId}
+          aria-label="Create a new note"
+          title="Create a new note"
+          className="fixed right-5 z-50
+             flex h-14 w-14
+             items-center justify-center
+             rounded-full
+             bg-[#A8B89A]
+             text-3xl text-[#263526]
+             shadow-xl
+             transition-transform
+             hover:scale-105
+             active:scale-95
+             disabled:cursor-not-allowed
+             disabled:opacity-40
+             sm:hidden
+             bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]"
+      >
+        +
+      </button>
+
       {showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label="A little letter" className="cozy-letter">
         <div className="mb-5 text-4xl">💌 🌷</div><h2 className="mb-5 text-2xl font-bold">A little letter for you</h2>
         <p className="leading-8">{gift.letter}</p>
