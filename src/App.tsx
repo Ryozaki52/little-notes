@@ -452,29 +452,35 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       </main>
 
       {/* Mobile floating new note button */}
+
+      {/* Floating Create Note Button */}
       <button
           type="button"
           onClick={() => void addNote()}
           disabled={busy || !!conflictId}
           aria-label="Create a new note"
           title="Create a new note"
-          className="fixed right-5 z-50
-             flex h-14 w-14
-             items-center justify-center
-             rounded-full
-             bg-[#A8B89A]
-             text-3xl text-[#263526]
-             shadow-xl
-             transition-transform
-             hover:scale-105
-             active:scale-95
-             disabled:cursor-not-allowed
-             disabled:opacity-40
-             sm:hidden
-             bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]"
+          style={{
+            position: 'fixed',
+            right: '20px',
+            bottom: 'max(24px, env(safe-area-inset-bottom))',
+            zIndex: 9999,
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            backgroundColor: '#A8B89A',
+            color: '#263526',
+            fontSize: '32px',
+            fontWeight: 'bold',
+            border: 'none',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            cursor: 'pointer',
+            opacity: busy || !!conflictId ? 0.45 : 1,
+          }}
       >
         +
       </button>
+
 
       {showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label="A little letter" className="cozy-letter">
         <div className="mb-5 text-4xl">💌 🌷</div><h2 className="mb-5 text-2xl font-bold">A little letter for you</h2>
