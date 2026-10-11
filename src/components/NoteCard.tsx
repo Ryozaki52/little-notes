@@ -2,7 +2,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { CSSProperties } from 'react'
-
+import type { Translate } from '../i18n/translations'
 
 export type Note = {
     id: string
@@ -11,6 +11,7 @@ export type Note = {
     color: string
     pinned: boolean
     sticker?: string
+    calendar_date: string | null
     position: number
     version: number
 }
@@ -26,6 +27,7 @@ type NoteCardProps = {
     onDelete: () => void
     onPin: () => void
     onUpdate: (changes: Partial<Note>) => void
+    t: Translate
 }
 
 
@@ -40,6 +42,7 @@ export default function NoteCard({
                                      onDelete,
                                      onPin,
                                      onUpdate,
+                                     t,
                                  }: NoteCardProps) {
     const {
         attributes,
@@ -89,8 +92,8 @@ export default function NoteCard({
                     {...listeners}
                     disabled={dragDisabled || editing}
                     style={{ touchAction: 'none' }}
-                    aria-label={`Drag ${note.title || 'Untitled note'}`}
-                    title="Drag to reorder"
+                    aria-label={`${t('dragNote')}: ${note.title || t('untitled')}`}
+                    title={t('dragTitle')}
                     className="cursor-grab rounded-xl
                      bg-white/45 px-3 py-2
                      text-sm text-[#665B52]
@@ -99,13 +102,13 @@ export default function NoteCard({
                      disabled:cursor-not-allowed
                      disabled:opacity-50"
                 >
-                    ⠿ Drag
+                    {t('drag')}
                 </button>
 
                 <button
                     type="button"
                     onClick={onPin}
-                    aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
+                    aria-label={note.pinned ? t('unpinNote') : t('pinNote')}
                     aria-pressed={note.pinned}
                     className="cursor-pointer rounded-full
                      bg-white/50 p-2
@@ -120,24 +123,24 @@ export default function NoteCard({
                 <div className="flex flex-1 flex-col gap-3">
 
                     <input
-                        aria-label="Note title"
+                        aria-label={t('noteTitle')}
                         value={note.title}
                         maxLength={100}
                         onChange={e =>
                             onUpdate({ title: e.target.value })
                         }
-                        placeholder="Give your note a title..."
+                        placeholder={t('titlePlaceholder')}
                         className="w-full rounded-xl bg-white/55
                        p-3 font-semibold outline-none"
                     />
 
                     <textarea
-                        aria-label="Note content"
+                        aria-label={t('noteContent')}
                         value={note.content}
                         onChange={e =>
                             onUpdate({ content: e.target.value })
                         }
-                        placeholder="Write something lovely..."
+                        placeholder={t('contentPlaceholder')}
                         className="min-h-32 w-full flex-1
                        resize-y rounded-xl
                        bg-white/55 p-3 text-sm
@@ -148,7 +151,7 @@ export default function NoteCard({
                     <div>
                         <p className="mb-2 text-xs font-semibold
                           text-[#76675D]">
-                            Paper color 🎨
+                            {t('paperColor')}
                         </p>
 
                         <div className="flex flex-wrap gap-2">
@@ -156,7 +159,7 @@ export default function NoteCard({
                                 <button
                                     key={color}
                                     type="button"
-                                    aria-label={`Choose color ${color}`}
+                                    aria-label={`${t('chooseColor')} ${color}`}
                                     aria-pressed={note.color === color}
                                     onClick={() => onUpdate({ color })}
                                     className={`h-8 w-8 cursor-pointer
@@ -176,7 +179,7 @@ export default function NoteCard({
                     <div>
                         <p className="mb-2 text-xs font-semibold
                           text-[#76675D]">
-                            Add a little sticker 🌷
+                            {t('sticker')}
                         </p>
 
                         <div className="flex flex-wrap gap-2">
@@ -186,8 +189,8 @@ export default function NoteCard({
                                     type="button"
                                     aria-label={
                                         sticker
-                                            ? `Choose sticker ${sticker}`
-                                            : 'Remove sticker'
+                                            ? `${t('chooseSticker')} ${sticker}`
+                                            : t('removeSticker')
                                     }
                                     aria-pressed={
                                         (note.sticker || '') === sticker
@@ -217,7 +220,7 @@ export default function NoteCard({
                        font-semibold text-[#675549]
                        hover:bg-white"
                     >
-                        Save & Close ♡
+                        {t('save')}
                     </button>
                 </div>
             ) : (
@@ -225,7 +228,7 @@ export default function NoteCard({
 
                     {note.sticker && (
                         <div
-                            aria-label={`Sticker ${note.sticker}`}
+                            aria-label={`${t('stickerLabel')} ${note.sticker}`}
                             className="mb-3 text-3xl"
                         >
                             {note.sticker}
@@ -234,13 +237,13 @@ export default function NoteCard({
 
                     <h3 className="mb-4 break-words text-lg
                          font-bold text-[#564B46]">
-                        {note.title || 'Untitled note'}
+                        {note.title || t('untitled')}
                     </h3>
 
                     <p className="mb-6 flex-1 whitespace-pre-wrap
                         break-words text-sm leading-7
                         text-[#655A53]">
-                        {note.content || 'Your thoughts go here...'}
+                        {note.content || t('emptyContent')}
                     </p>
 
                     <div className="flex flex-wrap gap-2
@@ -252,7 +255,7 @@ export default function NoteCard({
                          bg-white/50 px-3 py-2
                          text-sm hover:bg-white/85"
                         >
-                            ✏️ Edit
+                            {t('edit')}
                         </button>
 
                         <button
@@ -262,7 +265,7 @@ export default function NoteCard({
                          bg-white/50 px-3 py-2
                          text-sm hover:bg-white/85"
                         >
-                            🗑️ Delete
+                            {t('delete')}
                         </button>
                     </div>
                 </div>

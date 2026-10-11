@@ -7,6 +7,7 @@ export type Note = {
   color: string
   pinned: boolean
   sticker?: string
+  calendar_date: string | null
   position: number
   version: number
 }
@@ -26,6 +27,7 @@ export async function saveVersionedNote(userId: string, note: Note): Promise<Sav
         color: note.color,
         pinned: note.pinned,
         sticker: note.sticker ?? '',
+        calendar_date: note.calendar_date,
         position: note.position,
       })
       .eq('id', note.id)
@@ -44,13 +46,14 @@ export async function saveVersionedNote(userId: string, note: Note): Promise<Sav
 export async function loadCloudNotes(userId: string): Promise<Note[]> {
   const { data, error } = await supabase
     .from('notes')
-    .select('id,title,content,color,pinned,sticker,position,version')
+    .select('id,title,content,color,pinned,sticker,calendar_date,position,version')
     .eq('user_id', userId)
     .order('position', { ascending: true })
   if (error) throw error
   return ((data ?? []) as Note[]).map(note => ({
     ...note,
     sticker: note.sticker ?? '',
+    calendar_date: note.calendar_date ?? null,
     position: Number(note.position),
     version: Number(note.version),
   }))

@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { useLanguage } from '../i18n/useLanguage'
 
 export default function PasswordReset() {
+    const { language, setLanguage, t } = useLanguage()
     const [ready, setReady] = useState(false)
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
@@ -39,12 +41,12 @@ export default function PasswordReset() {
         e.preventDefault()
 
         if (password.length < 8) {
-            setMessage('Password must be at least 8 characters.')
+            setMessage(t('passwordTooShort'))
             return
         }
 
         if (password !== confirm) {
-            setMessage('Passwords do not match.')
+            setMessage(t('passwordsMismatch'))
             return
         }
 
@@ -59,7 +61,7 @@ export default function PasswordReset() {
             setMessage(error.message)
         } else {
             setSuccess(true)
-            setMessage('Password updated successfully! 🌷')
+            setMessage(t('passwordUpdated'))
         }
 
         setLoading(false)
@@ -75,6 +77,16 @@ export default function PasswordReset() {
                     justify-center bg-[#f8f3e9] px-5">
             <main className="w-full max-w-md rounded-3xl
                        bg-white p-8 shadow-xl">
+                <div className="mb-5 flex justify-end gap-1" role="group" aria-label={t('selectLanguage')}>
+                    <button type="button" onClick={() => setLanguage('zh')} aria-pressed={language === 'zh'}
+                            className={`rounded-full px-3 py-1 text-sm ${language === 'zh' ? 'bg-[#a8b89a] font-semibold' : 'bg-[#f6f1e7]'}`}>
+                        {t('chinese')}
+                    </button>
+                    <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'}
+                            className={`rounded-full px-3 py-1 text-sm ${language === 'en' ? 'bg-[#a8b89a] font-semibold' : 'bg-[#f6f1e7]'}`}>
+                        {t('english')}
+                    </button>
+                </div>
 
                 <div className="mb-5 text-center text-5xl">
                     💌
@@ -82,12 +94,12 @@ export default function PasswordReset() {
 
                 <h1 className="text-center text-2xl font-bold
                        text-[#75695a]">
-                    Reset Password
+                    {t('resetPassword')}
                 </h1>
 
                 <p className="mb-7 mt-3 text-center
                       text-sm text-[#948679]">
-                    A fresh start for your little space. ♡
+                    {t('resetSubtitle')}
                 </p>
 
                 {message && (
@@ -104,12 +116,12 @@ export default function PasswordReset() {
                         onClick={returnToLogin}
                         className="cozy-primary-button w-full"
                     >
-                        Back to Sign In ♡
+                        {t('backToSignIn')}
                     </button>
                 ) : !ready ? (
                     <div className="text-center">
                         <p className="mb-4 text-sm">
-                            Checking recovery session...
+                            {t('checkingRecovery')}
                         </p>
 
                         <button
@@ -117,7 +129,7 @@ export default function PasswordReset() {
                             onClick={returnToLogin}
                             className="cozy-button"
                         >
-                            Back to Sign In
+                            {t('backToSignIn')}
                         </button>
                     </div>
                 ) : (
@@ -125,7 +137,7 @@ export default function PasswordReset() {
                           className="space-y-4">
 
                         <label className="block text-sm font-medium">
-                            New Password
+                            {t('newPassword')}
                             <input
                                 type="password"
                                 required
@@ -139,7 +151,7 @@ export default function PasswordReset() {
                         </label>
 
                         <label className="block text-sm font-medium">
-                            Confirm Password
+                            {t('confirmPassword')}
                             <input
                                 type="password"
                                 required
@@ -158,8 +170,8 @@ export default function PasswordReset() {
                          disabled:opacity-50"
                         >
                             {loading
-                                ? 'Updating...'
-                                : 'Save New Password 🌷'}
+                                ? t('updating')
+                                : t('saveNewPassword')}
                         </button>
 
                     </form>

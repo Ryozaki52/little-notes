@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { useLanguage } from './i18n/useLanguage'
+import type { TranslationKey } from './i18n/translations'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
   useSensor, useSensors,
@@ -10,6 +12,7 @@ import {
   arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, SortableContext,
 } from '@dnd-kit/sortable'
 import AuthForm from './components/AuthForm'
+import CalendarView from './components/CalendarView'
 import NoteCard from './components/NoteCard'
 import PasswordReset from './components/PasswordReset'
 import { supabase } from './lib/supabase'
@@ -19,15 +22,15 @@ import type { Note } from './lib/notesApi'
 const colors = ['#FFE5AE', '#FAD5E5', '#E6DDFC', '#D9F1DC', '#D9EAFB', '#FFE2CC']
 const stickers = ['', '🌷', '🌼', '🌸', '☁️', '🍓', '🦋', '💗', '🍀', '🧸']
 const themes = {
-  cream: { name: 'Cream Journal', accent: '#A8B89A', soft: '#E9EEDC', text: '#655B50', background: '#F8F3E9' },
-  sakura: { name: 'Sakura Diary', accent: '#D7A2B9', soft: '#F8E4ED', text: '#785C6A', background: '#FFF1F5' },
-  forest: { name: 'Forest Cottage', accent: '#79957C', soft: '#DEE8D8', text: '#506B55', background: '#EDF3E8' },
+  cream: { accent: '#A8B89A', soft: '#E9EEDC', text: '#655B50', background: '#F8F3E9' },
+  sakura: { accent: '#D7A2B9', soft: '#F8E4ED', text: '#785C6A', background: '#FFF1F5' },
+  forest: { accent: '#79957C', soft: '#DEE8D8', text: '#506B55', background: '#EDF3E8' },
 }
 type Theme = keyof typeof themes
-const gift = {
-  greeting: 'A little place, just for you 🌷',
-  letter: 'I made this little space for you. I hope it holds your thoughts, tiny memories, and everything that makes you smile. ♡',
-  surprise: 'You deserve gentle days, beautiful moments, and lots of happiness. 🌼',
+const themeLabels: Record<Theme, TranslationKey> = {
+  cream: 'creamTheme',
+  sakura: 'sakuraTheme',
+  forest: 'forestTheme',
 }
 
 function readTheme(): Theme {
@@ -39,21 +42,29 @@ function readTheme(): Theme {
 }
 
 function AuthGate() {
+  const { t } = useLanguage()
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const signupSessionHold = useRef(false)
   useEffect(() => {
     let active = true
     void supabase.auth.getSession().then(({ data }) => {
       if (active) { setSession(data.session); setLoading(false) }
     }).catch(() => { if (active) setLoading(false) })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (active) { setSession(next); setLoading(false) }
+      if (active) {
+        setSession(signupSessionHold.current ? null : next)
+        setLoading(false)
+      }
     })
     return () => { active = false; subscription.unsubscribe() }
   }, [])
   if (window.location.pathname === '/reset-password') return <PasswordReset />
-  if (loading) return <main className="min-h-screen grid place-items-center">Loading your little space... 🌷</main>
-  if (!session) return <AuthForm />
+  if (loading) return <main className="min-h-screen grid place-items-center">{t('loadingSpace')}</main>
+  if (!session) return <AuthForm onSignupSessionHold={hold => {
+    signupSessionHold.current = hold
+    if (hold) setSession(null)
+  }} />
   return <CloudNotes key={session.user.id} userId={session.user.id} email={session.user.email ?? ''} />
 }
 
@@ -61,14 +72,16 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [ready, setReady] = useState(false)
   const [search, setSearch] = useState('')
+  const [view, setView] = useState<'notes' | 'calendar'>('notes')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [themeName, setThemeName] = useState<Theme>(readTheme)
+  const { language, setLanguage, t } = useLanguage()
   const [showLetter, setShowLetter] = useState(() => {
     try { return localStorage.getItem('little-notes-letter-seen') !== 'true' }
     catch { return true }
   })
   const [showSurprise, setShowSurprise] = useState(false)
-  const [status, setStatus] = useState('Connecting to cloud...')
+  const [status, setStatus] = useState<TranslationKey>('connecting')
   const [error, setError] = useState('')
   const [conflictId, setConflictId] = useState<string | null>(null)
   const [remoteChange, setRemoteChange] = useState(false)
@@ -105,7 +118,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       if (drafts.length) localStorage.setItem(draftKey, JSON.stringify(drafts))
       else localStorage.removeItem(draftKey)
     } catch {
-      setError('Browser storage is unavailable. Keep this tab open until changes save.')
+      setError(t('storageUnavailable'))
     }
   }
 
@@ -118,6 +131,10 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
         typeof v.id === 'string' && typeof v.version === 'number' &&
         typeof v.title === 'string' && typeof v.content === 'string' &&
         typeof v.position === 'number' && typeof v.color === 'string')
+        .map(note => ({
+          ...note,
+          calendar_date: typeof note.calendar_date === 'string' ? note.calendar_date : null,
+        }))
     } catch { return [] }
   }
 
@@ -139,12 +156,12 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       // Drafts are not automatically uploaded: remote state may have changed.
       if (dirty.current.size) {
         setDirtyCount(dirty.current.size)
-        setStatus('⚠️ Recovered unsaved drafts — review and retry')
+        setStatus('recoveredDrafts')
         setRemoteChange(true)
-      } else setStatus('☁️ All changes saved')
+      } else setStatus('saved')
     } else {
       replace(cloud)
-      setStatus('☁️ All changes saved')
+      setStatus('saved')
       setRemoteChange(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,18 +204,18 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
         const snapshot = notesRef.current.find(n => n.id === id)
         if (!snapshot) { dirty.current.delete(id); persistDrafts(); continue }
         const atRevision = revision.current.get(id) ?? 0
-        setStatus('⏳ Saving to cloud...')
+        setStatus('saving')
         const result = await saveVersionedNote(userId, snapshot)
         if (unmounted.current) return
         if (result.kind === 'error') {
-          setStatus('⚠️ Not saved — Retry available')
+          setStatus('notSaved')
           setError(result.message)
           break
         }
         if (result.kind === 'conflict') {
           setConflictId(id)
           conflictRef.current = id
-          setStatus('🔀 Another device changed a note')
+          setStatus('conflict')
           break
         }
         // The server accepted the snapshot. New typing may have happened meanwhile.
@@ -208,7 +225,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
         persistDrafts()
         setError('')
       }
-      if (!dirty.current.size && !conflictRef.current) setStatus('☁️ All changes saved')
+      if (!dirty.current.size && !conflictRef.current) setStatus('saved')
     } finally {
       flushRunning.current = false
       if (!unmounted.current) setBusy(false)
@@ -225,7 +242,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
     dirty.current.add(id)
     revision.current.set(id, (revision.current.get(id) ?? 0) + 1)
     persistDrafts()
-    setStatus('✏️ Unsaved changes')
+    setStatus('unsavedChanges')
     scheduleFlush()
   }
 
@@ -242,6 +259,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       const note: Note = {
         id: crypto.randomUUID(), title: '', content: '',
         color: '#FFE5AE', pinned: false, sticker: '',
+        calendar_date: null,
         position: notesRef.current.length, version: 1,
       }
       const { data, error: insertError } = await supabase.from('notes')
@@ -250,17 +268,18 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       if (insertError) throw insertError
       replace([...notesRef.current, { ...note, version: Number(data.version) }])
       setSearch('')
+      setView('notes')
       setEditingId(note.id)
       setError('')
-    } catch (e) { setError('Could not create note: ' + String(e)) }
+    } catch (e) { setError(`${t('createFailed')} ${String(e)}`) }
     finally { setBusy(false) }
   }
 
   async function deleteNote(id: string) {
-    if (!window.confirm('Delete this little note? 🌷')) return
+    if (!window.confirm(t('deleteConfirm'))) return
     if (busyRef.current || conflictRef.current) return
     if (dirty.current.has(id)) {
-      setError('Save or resolve this note before deleting it.')
+      setError(t('saveBeforeDelete'))
       return
     }
     const note = notesRef.current.find(n => n.id === id)
@@ -271,11 +290,11 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
         .eq('id', id).eq('user_id', userId).eq('version', note.version)
         .select('id').maybeSingle()
       if (deleteError) throw deleteError
-      if (!data) { setConflictId(id); setError('Delete conflict: this note changed on another device.'); return }
+      if (!data) { setConflictId(id); setError(t('deleteConflict')); return }
       replace(notesRef.current.filter(n => n.id !== id))
       if (editingId === id) setEditingId(null)
       setError('')
-    } catch (e) { setError('Delete failed: ' + String(e)) }
+    } catch (e) { setError(`${t('deleteFailed')} ${String(e)}`) }
     finally { setBusy(false) }
   }
 
@@ -285,11 +304,11 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
     setBusy(true)
     try {
       const { data, error: readError } = await supabase.from('notes')
-        .select('id,title,content,color,pinned,sticker,position,version')
+        .select('id,title,content,color,pinned,sticker,calendar_date,position,version')
         .eq('id', id).eq('user_id', userId).maybeSingle()
       if (readError) throw readError
       if (!data && keepMine) {
-        setError('This note was deleted remotely. Copy your draft before discarding it.')
+        setError(t('remotelyDeleted'))
         return
       }
       if (keepMine && data) {
@@ -298,7 +317,8 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       } else {
         replace(data
           ? notesRef.current.map(n => n.id === id ? {
-              ...data, sticker: data.sticker ?? '', version: Number(data.version), position: Number(data.position),
+              ...data, sticker: data.sticker ?? '', calendar_date: data.calendar_date ?? null,
+              version: Number(data.version), position: Number(data.position),
             } : n)
           : notesRef.current.filter(n => n.id !== id))
         dirty.current.delete(id)
@@ -307,7 +327,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       setConflictId(null)
       setError('')
       persistDrafts()
-      setStatus(keepMine ? '✏️ Retrying your version...' : '☁️ Cloud version loaded')
+      setStatus(keepMine ? 'retryingVersion' : 'cloudVersionLoaded')
     } catch (e) { setError(String(e)) }
     finally { setBusy(false) }
     if (keepMine) void flush()
@@ -343,13 +363,13 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       }
     }
     persistDrafts()
-    setStatus('✏️ Saving new order...')
+    setStatus('savingOrder')
     scheduleFlush()
   }
 
   async function refreshCloud() {
     if (dirty.current.size || editingRef.current || busyRef.current) {
-      setError('Resolve or save local changes before refreshing.')
+      setError(t('resolveBeforeRefresh'))
       return
     }
     try { await fetchCloud(); setError('') }
@@ -358,7 +378,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
 
   async function signOut() {
     if (dirty.current.size || busyRef.current) {
-      setError('Unsaved changes remain. Retry saving before signing out.')
+      setError(t('saveBeforeSignOut'))
       return
     }
     const { error: signOutError } = await supabase.auth.signOut()
@@ -373,7 +393,7 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
   const filtered = ordered.filter(n => `${n.title} ${n.content}`.toLowerCase().includes(search.trim().toLowerCase()))
   const dragDisabled = !!search.trim() || !!editingId || !!conflictId || dirtyCount > 0 || busy
 
-  if (!ready) return <main className="min-h-screen grid place-items-center">Loading your notes... ☁️</main>
+  if (!ready) return <main className="min-h-screen grid place-items-center">{t('loadingNotes')}</main>
 
   return (
     <div className="little-notes-page min-h-screen px-4 py-8 sm:px-8" style={{
@@ -382,85 +402,165 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
     } as CSSProperties}>
       <main className="mx-auto max-w-6xl">
         <header className="mb-9 flex flex-wrap items-center justify-between gap-4">
+
+
+          <div
+              className="flex items-center gap-1
+             rounded-full bg-white/75
+             p-1 shadow-sm"
+              role="group"
+              aria-label={t('selectLanguage')}
+          >
+            <button
+                type="button"
+                onClick={() => setLanguage('zh')}
+                aria-pressed={language === 'zh'}
+                className={`cursor-pointer rounded-full
+                px-4 py-2 text-sm transition-all ${
+                    language === 'zh'
+                        ? 'bg-[#A8B89A] font-semibold text-[#263526]'
+                        : 'text-[#655B50] hover:bg-white/80'
+                }`}
+            >
+              {t('chinese')}
+            </button>
+
+            <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                aria-pressed={language === 'en'}
+                className={`cursor-pointer rounded-full
+                px-4 py-2 text-sm transition-all ${
+                    language === 'en'
+                        ? 'bg-[#A8B89A] font-semibold text-[#263526]'
+                        : 'text-[#655B50] hover:bg-white/80'
+                }`}
+            >
+              {t('english')}
+            </button>
+          </div>
           <div>
-            <h1 className="text-3xl font-bold sm:text-4xl">🌷 Little Notes ♡</h1>
-            <p className="mt-2 text-sm opacity-70">A little space for your thoughts.</p>
+            <h1 className="text-3xl font-bold sm:text-4xl">🌷 {t('appTitle')}</h1>
+            <p className="mt-2 text-sm opacity-70">{t('appSubtitle')}</p>
             <p className="mt-1 text-xs opacity-60">{email}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="cozy-button" onClick={() => setShowLetter(true)}>💌 Letter</button>
-            <button className="cozy-button" onClick={() => setShowSurprise(true)}>💗</button>
-            <button className="cozy-button" onClick={() => void signOut()}>Sign Out</button>
+            <button className="cozy-button" onClick={() => setShowLetter(true)}>{t('letter')}</button>
+            <button className="cozy-button" aria-label={t('surprise')} title={t('surprise')} onClick={() => setShowSurprise(true)}>💗</button>
+            <button className="cozy-button" onClick={() => void signOut()}>{t('signOut')}</button>
           </div>
         </header>
 
         <section className="cozy-panel mb-7 p-6 sm:p-8">
           <div className="mb-3 text-3xl">🌼 ☁️ 🍃</div>
-          <h2 className="mb-3 text-2xl font-bold">{gift.greeting}</h2>
-          <p className="opacity-80">Keep your plans, tiny memories, and happy thoughts all in one cozy space. ♡</p>
+          <h2 className="mb-3 text-2xl font-bold">{t('welcome')}</h2>
+          <p className="opacity-80">{t('welcomeDescription')}</p>
           <div className="mt-6 flex flex-wrap gap-2 border-t border-black/5 pt-5">
             {(Object.keys(themes) as Theme[]).map(name => (
               <button key={name} onClick={() => setThemeName(name)}
                 className={`rounded-full border px-4 py-2 text-sm cursor-pointer ${themeName === name ? 'bg-white font-bold' : 'bg-white/50'}`}>
-                {name === 'cream' ? '🍯' : name === 'sakura' ? '🌸' : '🌿'} {themes[name].name}
+                {name === 'cream' ? '🍯' : name === 'sakura' ? '🌸' : '🌿'} {t(themeLabels[name])}
               </button>
             ))}
           </div>
         </section>
 
         <section className="cozy-panel mb-7 p-4" aria-live="polite">
-          <p className="font-semibold">{status}</p>
+          <p className="font-semibold">{t(status)}</p>
           {error && <p role="alert" className="mt-2 text-sm text-red-800">{error}</p>}
           {conflictId && <div className="mt-3 flex flex-wrap gap-2">
-            <button className="cozy-button" disabled={busy} onClick={() => void resolveConflict(false)}>Load cloud version (discard my draft)</button>
-            <button className="cozy-button" disabled={busy} onClick={() => void resolveConflict(true)}>Keep my draft and retry</button>
+            <button className="cozy-button" disabled={busy} onClick={() => void resolveConflict(false)}>{t('loadCloudVersion')}</button>
+            <button className="cozy-button" disabled={busy} onClick={() => void resolveConflict(true)}>{t('keepDraft')}</button>
           </div>}
           <div className="mt-3 flex flex-wrap gap-2">
             {dirtyCount > 0 && !conflictId &&
-              <button disabled={busy} onClick={() => void retry()} className="cozy-button">↻ Retry Save ({dirtyCount})</button>}
+              <button disabled={busy} onClick={() => void retry()} className="cozy-button">{t('retrySave')} ({dirtyCount})</button>}
             <button disabled={busy || dirtyCount > 0 || !!editingId}
-              className="cozy-button disabled:opacity-40" onClick={() => void refreshCloud()}>☁️ Refresh Cloud</button>
-            {remoteChange && <span className="text-sm self-center">Remote changes available</span>}
+              className="cozy-button disabled:opacity-40" onClick={() => void refreshCloud()}>{t('refreshCloud')}</button>
+            {remoteChange && <span className="text-sm self-center">{t('remoteChanges')}</span>}
           </div>
         </section>
 
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-2xl font-bold">Your little note wall ✨</h2>
-            <p className="mt-1 text-sm opacity-70">{notes.length} notes · {notes.filter(n => n.pinned).length} pinned</p>
-          </div>
-          <button disabled={busy || !!conflictId} className="cozy-primary-button disabled:opacity-40" onClick={() => void addNote()}>+ New Note</button>
-        </div>
-        <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Search your little notes..." aria-label="Search notes"
-          className="mb-5 w-full rounded-2xl border border-white bg-white/80 p-4 outline-none" />
-        <p className="mb-5 text-xs opacity-65">⠿ Drag to reorder · Search and editing temporarily disable dragging</p>
+        <nav className="mb-7 flex gap-2" aria-label={`${t('notesView')} / ${t('calendarView')}`}>
+          <button
+            type="button"
+            aria-current={view === 'notes' ? 'page' : undefined}
+            onClick={() => setView('notes')}
+            className={`rounded-full px-5 py-2 font-semibold ${view === 'notes' ? 'bg-[var(--theme-accent)] text-white' : 'bg-white/65'}`}
+          >
+            📝 {t('notesView')}
+          </button>
+          <button
+            type="button"
+            aria-current={view === 'calendar' ? 'page' : undefined}
+            onClick={() => {
+              setEditingId(null)
+              setView('calendar')
+            }}
+            className={`rounded-full px-5 py-2 font-semibold ${view === 'calendar' ? 'bg-[var(--theme-accent)] text-white' : 'bg-white/65'}`}
+          >
+            🗓️ {t('calendarView')}
+          </button>
+        </nav>
 
-        {filtered.length === 0 ? <div className="cozy-panel p-12 text-center">🌼 No notes found. Create a little memory!</div> :
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={filtered.map(n => n.id)} strategy={rectSortingStrategy}>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map(note => <NoteCard key={note.id} note={note} colors={colors} stickers={stickers}
-                  editing={editingId === note.id} dragDisabled={dragDisabled}
-                  onEdit={() => setEditingId(note.id)} onDone={() => void finishEditing()}
-                  onDelete={() => void deleteNote(note.id)}
-                  onPin={() => editNote(note.id, { pinned: !note.pinned })}
-                  onUpdate={patch => editNote(note.id, patch)} />)}
+        {view === 'notes' ? (
+          <>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div><h2 className="text-2xl font-bold">{t('noteWall')}</h2>
+                <p className="mt-1 text-sm opacity-70">{notes.length} {t('notes')} · {notes.filter(n => n.pinned).length} {t('pinned')}</p>
               </div>
-            </SortableContext>
-          </DndContext>}
-        <footer className="mt-20 pb-6 text-center text-sm opacity-70">Slow days, soft thoughts, little joys. 🌼</footer>
+              <button
+                  disabled={busy || !!conflictId}
+                  className="cozy-primary-button"
+                  onClick={() => void addNote()}
+              >
+                {t('newNote')}
+              </button>
+            </div>
+            <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={t('search')}
+                aria-label={t('search')}
+                className="mb-5 w-full rounded-2xl border
+                 border-white bg-white/80 p-4 outline-none"
+            />
+            <p className="mb-5 text-xs opacity-65">{t('dragHint')}</p>
+
+            {filtered.length === 0 ? <div className="cozy-panel p-12 text-center">{t('noNotes')}</div> :
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={filtered.map(n => n.id)} strategy={rectSortingStrategy}>
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map(note => <NoteCard key={note.id} note={note} colors={colors} stickers={stickers}
+                      editing={editingId === note.id} dragDisabled={dragDisabled}
+                      t={t}
+                      onEdit={() => setEditingId(note.id)} onDone={() => void finishEditing()}
+                      onDelete={() => void deleteNote(note.id)}
+                      onPin={() => editNote(note.id, { pinned: !note.pinned })}
+                      onUpdate={patch => editNote(note.id, patch)} />)}
+                  </div>
+                </SortableContext>
+              </DndContext>}
+          </>
+        ) : (
+          <CalendarView
+            notes={notes}
+            language={language}
+            disabled={!!conflictId}
+            t={t}
+            onAssignDate={(noteId, date) => editNote(noteId, { calendar_date: date })}
+          />
+        )}
+        <footer className="mt-20 pb-6 text-center text-sm opacity-70">{t('footer')}</footer>
       </main>
 
-      {/* Mobile floating new note button */}
-
-      {/* Floating Create Note Button */}
-      {/* Floating Create Note Button */}
       <button
           type="button"
           onClick={() => void addNote()}
           disabled={busy || !!conflictId}
-          aria-label="Create a new note"
-          title="Create a new note"
+          aria-label={t('createNote')}
+          title={t('createNote')}
           className={editingId ? 'hidden' : 'sm:hidden'}
           style={{
             position: 'fixed',
@@ -484,17 +584,17 @@ function CloudNotes({ userId, email }: { userId: string; email: string }) {
       </button>
 
 
-      {showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label="A little letter" className="cozy-letter">
-        <div className="mb-5 text-4xl">💌 🌷</div><h2 className="mb-5 text-2xl font-bold">A little letter for you</h2>
-        <p className="leading-8">{gift.letter}</p>
+      {showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label={t('letterDialogLabel')} className="cozy-letter">
+        <div className="mb-5 text-4xl">💌 🌷</div><h2 className="mb-5 text-2xl font-bold">{t('letterTitle')}</h2>
+        <p className="leading-8">{t('letterBody')}</p>
         <button autoFocus className="cozy-primary-button mt-7 w-full" onClick={() => {
           setShowLetter(false)
           try { localStorage.setItem('little-notes-letter-seen', 'true') } catch { /* optional */ }
-        }}>Keep this little letter ♡</button>
+        }}>{t('keepLetter')}</button>
       </div></div>}
-      {showSurprise && !showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label="A little surprise" className="cozy-letter text-center">
-        <div className="mb-5 text-5xl">💗 ✨</div><h2 className="mb-5 text-2xl font-bold">Just a little reminder...</h2>
-        <p className="leading-8">{gift.surprise}</p><button autoFocus onClick={() => setShowSurprise(false)} className="cozy-primary-button mt-8 w-full">Aww, thank you ♡</button>
+      {showSurprise && !showLetter && <div className="cozy-modal-backdrop"><div role="dialog" aria-modal="true" aria-label={t('surprise')} className="cozy-letter text-center">
+        <div className="mb-5 text-5xl">💗 ✨</div><h2 className="mb-5 text-2xl font-bold">{t('surpriseTitle')}</h2>
+        <p className="leading-8">{t('surpriseBody')}</p><button autoFocus onClick={() => setShowSurprise(false)} className="cozy-primary-button mt-8 w-full">{t('surpriseThanks')}</button>
       </div></div>}
     </div>
   )
